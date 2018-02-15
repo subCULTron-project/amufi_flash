@@ -24,23 +24,13 @@ def initArgParse():
                         help='format sd-card partitions to ext4')
     parser.add_argument('-c', '--copy_image', action='store_true',
                         help='copy image to "system" parition')
-    parser.add_argument('-n', '--num',  action='store',
+    parser.add_argument('-n', '--number',  action='store',
                         help='specify the agent-number the image should be configured for')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='detailed output')
     parser.add_argument('--force', action='store_true',
                         help='no safety checks')
-
-    # parser.add_argument('-po', '--partition_only', action='store_true',
-    #                     help='only do the partition')
-    # parser.add_argument('-fo', '--format_only', action='store_true',
-    #                     help='only do the formatting')
-    # parser.add_argument('-co', '--copy_image_only', action='store_true',
-    #                     help='only do the flashing of the image')
-
-    parser.add_argument('-no', '--number_image_only', action='store_true',
-                        help='only do the numbering/configuration of the image')
 
     return parser.parse_args()
 
@@ -78,7 +68,8 @@ def checks(args):
     part=part_init
     while True:
         if os.path.exists(dev+str(part)):
-            print("Warning: '{}' exists, correct device?".format(dev+str(part)))
+            label = subprocess.getoutput('e2label {}'.format(dev+str(part)))
+            print("Warning: '{}' {} exists, correct device?".format(dev+str(part),label))
             part += 1
         else:
             break
@@ -91,19 +82,51 @@ def checks(args):
             sys.exit()
         return
 
+    # if copying image: image exists?
+    try:
+        if not os.path.exists(args.copy_image):
+            print("Error: device '{}' does not exist.".format(dev))
+            sys.exit()
+    except NameError:
+        pass
+
+    print("* Basic checks OK.")
+
+
+def copy(args, conf):
+    """ Flash the system partition of the sd with the image specified in 'config.ini' or in the 'image' cmd-line argument. Test if flashing was successful.
+    """
+    img=os.path.join(dir_path, conf['DEFAULT']['Image'])
+    dev=args.dev
+
+    print("Flashing device {}1 with image {}.".format(dev, img))
+
+    # create flashing command
+    cmd=['dd', str('if={}'.format(img)), str(
+        'of={}'.format(dev)), str('bs=4M')]
+    if args.verbose:
+        print("* Executing command: {} ...".format(" ".join(cmd)))
+
+    # execute command
+    try:
+        subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
+    except subprocess.CalledProcessError:
+        print("subprocess error while calling '{}'.".format(" ".join(cmd)))
+        sys.exit()
+    print('')
 
 
 def partition(args, conf):
     """Construct the fdisk partition command and call the partition bash script to execute the command with the given options
     """
-    sys_part_size=conf['DEFAULT']['SystemPartitionSize']
+    dev = args.dev
 
-    print("Partitioning device {}: system - {}MB ; data - <device-size> -{}MB.".format(
-        args.dev, sys_part_size, sys_part_size))
+    print("Partitioning the unused space on device {} to a partition 'data'.".format(dev))
+
 
     # create partition command
     partition_script_path=os.path.join(dir_path, 'partition.sh')
-    cmd=[partition_script_path, str(args.dev), str(sys_part_size)]
+    cmd=[partition_script_path, str(args.dev)]
 
     if args.verbose:
         print("* Executing command: {} ...".format(" ".join(cmd)))
@@ -114,68 +137,49 @@ def partition(args, conf):
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
-
-    if args.verbose:
-        print(" -->  Formatted {}1 and {}2.\n".format(args.dev, args.dev))
-
+    print('')
 
 
 def format(args, conf):
     """Format partitions 1 and 2 to ext4
     """
     dev=args.dev
-    if args.verbose:
-        print("Formatting devices {}1 and {}2 with ext4.".format(dev, dev))
+
+    print("Formatting data partition to ext4.".format(dev))
 
     # create format partition commands
-    cmd1=['mkfs.ext4', str('-L'), str('system'), str(dev+'1')]
+    cmd=['mkfs.ext4', '-L', 'data', '-F', str(dev+'3')]
 
-    cmd2=['mkfs.ext4', str('-L'), str('data'), str(dev+'2')]
 
     if args.verbose:
-        print("* Executing commands: \n* {} ...\n* {} ...".format(" ".join(cmd1), " ".join(cmd2)))
-    try:
-        subprocess.call(cmd1, stdout=dev_null, stderr=dev_null)
-    except subprocess.CalledProcessError:
-        print("subprocess error while calling '{}'.".format(" ".join(cmd1)))
-        sys.exit()
-
-    try:
-        subprocess.call(cmd2, stdout=dev_null, stderr=dev_null)
-    except subprocess.CalledProcessError:
-        print("subprocess error while calling '{}'.".format(" ".join(cmd2)))
-        sys.exit()
-
-    if args.verbose:
-        print(" -->  Formatted ... \n      {}1 to ext4, labeled 'system'\n      {}2 to ext4, labeled 'data'\n".format(dev, dev))
-
-
-
-def copy(args, conf):
-    """ Flash the system partition of the sd with the image specified in 'config.ini' or in the 'image' cmd-line argument. Test if flashing was successful.
-    """
-    img=os.path.join(dir_path, conf['DEFAULT']['Image'])
-    dev=args.dev
-
-    if args.verbose:
-        print("Flashing device {}1 with image {}.".format(dev, img))
-
-    # create flashing command
-    cmd=['dd', str('if={}'.format(img)), str(
-        'of={}1'.format(dev)), str('status=progress'), str('bs=4M')]
-    if args.verbose:
-        print("* Executing command: {} ...".format(" ".join(cmd)))
-
-    # execute command
+        print("* Executing command: {}".format(cmd))
     try:
         subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
 
-    if args.verbose:
-        print(" --> Flashed image '{}' to device {}1\n".format(img, dev))
+    print('')
 
+
+def number(args, conf):
+    """Configure the hostname, and ip settings of the target device.
+    """
+    dev = args.dev
+
+    os.system('mkdir mnt')
+    if os.WEXITSTATUS(os.system('mount {}1 mnt'.format(dev))) != 0:
+        print("Error: Could not mount {}1.".format(dev))
+        sys.exit()
+
+    interfaces_path = conf.get('DEFAULT', 'InterfacesPath')
+    hosts_path = conf.get('DEFAULT', 'HostsPath')
+    hostname_path = conf.get('DEFAULT', 'HostnamePath')
+
+
+
+    os.system('umount mnt')
+    os.system('rm -r mnt')
 
 
 def main():
@@ -189,13 +193,17 @@ def main():
     args=initArgParse()
 
     # program start
-    print("\n*aMuFi_flash*\n")
+    print("\n aMuFi_flash")
 
     # safety test: check if device is empty:
     if not args.force:
         checks(args)
     else:
         print("--force, no safety checks!")
+
+    # copy:
+    if args.copy_image:
+        copy(args, conf)
 
     # partition:
     if args.partition:
@@ -205,9 +213,11 @@ def main():
     if args.format:
         format(args, conf)
 
-    # copy:
-    if args.copy_image:
-        copy(args, conf)
+    # number configs
+    if args.number:
+        number(args, conf)
+
+
 
 if __name__ == "__main__":
     main()
