@@ -4,6 +4,9 @@ import configparser
 import os
 import subprocess
 import sys
+import time
+
+from utils import Checks
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 conf_file = os.path.join(dir_path, 'config.ini')
@@ -26,6 +29,7 @@ def initArgParse():
                         help='copy image to "system" parition')
     parser.add_argument('-n', '--number',  action='store',
                         help='specify the agent-number the image should be configured for')
+
     parser.add_argument('-i', '--image',  action='store',
                         help="specify imagefile to be copied, default can be configured in 'config.ini'")
 
@@ -78,7 +82,7 @@ def checks(args, conf):
             break
     if part > part_init:
         print(
-            "Having more than two partition hints at the target not being an empty sd-card or a aMu or aFi card.")
+            "Having more than three partition hints at the target not being an empty sd-card or a aMu or aFi card.")
         print("continue? n/[Y]")
         k = input()
         if k == 'n':
@@ -113,7 +117,7 @@ def copy(args, conf):
     img=os.path.join(dir_path, conf['DEFAULT']['Image'])
     dev=args.dev
 
-    print("Flashing device {}1 with image {}.".format(dev, img))
+    print("Flashing device {} with image {}.".format(dev, img))
 
     # create flashing command
     cmd=['dd', str('if={}'.format(img)), str(
@@ -123,11 +127,11 @@ def copy(args, conf):
 
     # execute command
     try:
-        subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
+        subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
-    print('')
+    print("Flashing done.\n")
 
 
 def partition(args, conf):
@@ -135,7 +139,7 @@ def partition(args, conf):
     """
     dev = args.dev
 
-    print("Partitioning the unused space on device {} to a partition 'data'.".format(dev))
+    print("Partitioning the unused space on device {}.".format(dev))
 
 
     # create partition command
@@ -147,15 +151,24 @@ def partition(args, conf):
 
     # execute partition command
     try:
-        subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
+        subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
-    print('')
+
+    # execute partprobe to update partitiontable in kernel
+    try:
+        cmd = ['partprobe', str(dev)]
+        subprocess.call(cmd, stdout=dev_null)
+    except subprocess.CalledProcessError:
+        print("subprocess error while calling '{}'.".format(cmd))
+        sys.exit()
+
+    print("Partitioning done.\n")
 
 
 def format(args, conf):
-    """Format partitions 1 and 2 to ext4
+    """Format partitions3 to ext4
     """
     dev=args.dev
 
@@ -168,12 +181,12 @@ def format(args, conf):
     if args.verbose:
         print("* Executing command: {}".format(cmd))
     try:
-        subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
+        subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
 
-    print('')
+    print("Formatting done.\n")
 
 
 def number(args, conf):
@@ -181,20 +194,31 @@ def number(args, conf):
     """
     dev = args.dev
 
-    os.system('mkdir mnt')
+    # mount flashed image to 'mnt'
+    mnt_folder = "mnt"
+    os.system('mkdir {}'.format(mnt_folder))
+
     if os.WEXITSTATUS(os.system('mount {}1 mnt'.format(dev))) != 0:
         print("Error: Could not mount {}1.".format(dev))
         sys.exit()
 
-    interfaces_path = conf.get('DEFAULT', 'InterfacesPath')
-    hosts_path = conf.get('DEFAULT', 'HostsPath')
-    hostname_path = conf.get('DEFAULT', 'HostnamePath')
+    mountpoint = os.path.join(dir_path, mnt_folder)
 
+    interfaces_path = os.path.join(mountpoint, conf.get('DEFAULT', 'InterfacesPath'))
+    hosts_path = os.path.join(mountpoint, conf.get('DEFAULT', 'HostsPath'))
+    hostname_path = os.path.join(mountpoint, conf.get('DEFAULT', 'HostnamePath'))
 
+    print(interfaces_path)
+    print(hostname_path)
+    print(hosts_path)
 
-    os.system('umount mnt')
-    os.system('rm -r mnt')
+    # check if files exist:
+    # TODO:
 
+    # unmount and remove temp mnt folder
+    os.system('umount {}'.format(mnt_folder))
+    os.system('rm -r {}'.format(mnt_folder))
+    print("Numbering done.\n")
 
 def main():
     """Main function
@@ -230,6 +254,8 @@ def main():
     # number configs
     if args.number:
         number(args, conf)
+
+
 
 
 
