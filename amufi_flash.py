@@ -26,6 +26,9 @@ def initArgParse():
                         help='copy image to "system" parition')
     parser.add_argument('-n', '--number',  action='store',
                         help='specify the agent-number the image should be configured for')
+    parser.add_argument('-i', '--image',  action='store',
+                        help="specify imagefile to be copied, default can be configured in 'config.ini'")
+
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='detailed output')
@@ -35,7 +38,7 @@ def initArgParse():
     return parser.parse_args()
 
 
-def checks(args):
+def checks(args, conf):
     """Check if device exists, has a filesystem on it already or has data on it.
     Several additional checks to mitigate risks of overwriting unintentionally.
     """
@@ -84,9 +87,20 @@ def checks(args):
 
     # if copying image: image exists?
     try:
-        if not os.path.exists(args.copy_image):
-            print("Error: device '{}' does not exist.".format(dev))
+        # image from cmd-line arg
+
+        if args.image:
+            img=os.path.join(dir_path, args.image)
+            if  not os.path.exists(img):
+                print("Error: image '{}' does not exist.".format(img))
+                sys.exit()
+
+        # image specified in 'config/ini'
+        img=os.path.join(dir_path, conf['DEFAULT']['Image'])
+        if not os.path.exists(img):
+            print("Error: image '{}' does not exist.".format(img))
             sys.exit()
+
     except NameError:
         pass
 
@@ -197,7 +211,7 @@ def main():
 
     # safety test: check if device is empty:
     if not args.force:
-        checks(args)
+        checks(args, conf)
     else:
         print("--force, no safety checks!")
 
