@@ -6,23 +6,19 @@
 amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] dev
 ```
 
-+ **-h , --help**
+positional arguments:
+⋅⋅⋅  **dev**                   device location of sd card
 
-+ **-p, --partition** -- partition 
+optional arguments:
+⋅⋅⋅  **-h, --help**            show this help message and exit
+⋅⋅⋅  **-p, --partition**       partition the remaining space on the sd card after flashing the image
+⋅⋅⋅  **-f, --format**          format the created data partition to ext4
+⋅⋅⋅  **-c, --copy_image**      flash the specified image (with -i or in the config file)
+⋅⋅⋅  **-n NUMBER, --number NUMBER**
+⋅⋅⋅ ⋅⋅⋅                       specify the agent-number the image should be configured for
+⋅⋅⋅  **-i IMAGE, --image IMAGE**
+⋅⋅⋅ ⋅⋅⋅                       specify imagefile to be copied, default can be configured in 'config.ini'
 
-+ **-f, --format** -- format data partition to ext4
-
-+ **-c, --copy_image** -- flash the image
-
-parser.add_argument('-n', '--number',  action='store',
-                    help='specify the agent-number the image should be configured for')
-parser.add_argument('-i', '--image',  action='store',
-                    help="specify imagefile to be copied, default can be configured in 'config.ini'")
-parser.add_argument('-v', '--verbose', action='store_true',
-                    help='detailed output')
-parser.add_argument('-s', '--size', action='store_true',
-                    help='get size in bytes of device')
-parser.add_argument('-cr', '--cardreader', action='store_true',
-                    help='use cardreader instead of usb (changes partition prefix)')
-parser.add_argument('dev', action='store',
-                    help='device location of sd card')
+⋅⋅⋅  **-s, --size**            just get size in bytes of device and exit
+⋅⋅⋅  **-cr, --cardreader**     use cardreader instead of usb (changes partition
+                        prefix)
