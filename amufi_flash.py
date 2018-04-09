@@ -120,7 +120,7 @@ def partition(args, conf):
     """
     dev = args.dev
 
-    print("Partitioning the unused space on device {}.".format(dev))
+    print("* Partitioning the unused space on device {} for a data partition.".format(dev))
 
     # create partition command
     partition_script_path = os.path.join(dir_path, 'partition.sh')
@@ -131,20 +131,20 @@ def partition(args, conf):
 
     # execute partition command
     try:
-        subprocess.call(cmd, stdout=dev_null)
+        subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
-
-    # execute partprobe to update partitiontable in kernel
+    # the 'Re-reading the partition table failed.: Device or resource busy' warning is suppressed here,
+    # since partprobe is called to update partitiontable in kernel here
     try:
-        cmd = ['partprobe']  # , str(dev)]
+        cmd = ['partprobe' , dev]
         subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(cmd))
         sys.exit()
 
-    print("Partitioning done.\n")
+    print("*** Partitioning done.\n")
 
 
 def format(args, conf):
@@ -152,10 +152,15 @@ def format(args, conf):
     """
     dev = args.dev
 
-    print("Formatting data partition to ext4.".format(dev))
+    # determine correct partition prefix
+    if args.cardreader:
+        part = conf['CARDREADER']['DataPart']
+    else:
+        part = conf['DEFAULT']['DataPart']
+    print("* Formatting data partition {}{} to ext4.".format(dev,part))
 
     # create format partition commands
-    cmd = ['mkfs.ext4', '-L', 'data', '-F', str(dev+'3')]
+    cmd = ['mkfs.ext4', '-L', 'data', '-F', dev+part]
 
     if args.verbose:
         print("* Executing command: {}".format(cmd))
@@ -165,7 +170,7 @@ def format(args, conf):
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
 
-    print("Formatting done.\n")
+    print("*** Formatting done.\n")
 
 
 def number(args, conf):
@@ -175,29 +180,30 @@ def number(args, conf):
 
     # determine correct partition prefix
     if args.cardreader:
-        part = conf['CARDREADER']['sys_part']
+        part = conf['CARDREADER']['SysPart']
     else:
-        part = conf['DEFAULT']['sys_part']
+        part = conf['DEFAULT']['SysPart']
 
     # mount flashed image to 'mnt'
     mnt_folder = conf['DEFAULT']['Mountpoint']
     if not os.path.exists(mnt_folder):
         os.system('mkdir {}'.format(mnt_folder))
 
-    if os.WEXITSTATUS(os.system("mount {}{} mnt".format(dev, part))) != 0:
-        print("Error: Could not mount {}{}.".format(dev, part))
-        #os.system('rm -rf mnt')
+    mount_return_code = os.WEXITSTATUS(os.system("mount {}{} mnt".format(dev, part)))
+    if mount_return_code != 32 and mount_return_code != 0: # 32 means already mounted
+        print("Error: could not mount {}{}".format(dev, part))
         sys.exit()
 
     NEW_HOSTNAME = "aMussel"+args.number
 
     # hostname file
-    print("Setting hostname in file "+conf["PATHS"]["HostNamePath"]+" to "+NEW_HOSTNAME)
+    print("* Setting hostname in file "+conf["PATHS"]["HostNamePath"]+" to "+NEW_HOSTNAME)
     f = open(conf["PATHS"]["HostNamePath"], 'w')
     f.write(NEW_HOSTNAME+ os.linesep)
+    f.close()
 
     # hosts file
-    print("Setting hostname in file "+conf["PATHS"]["HostsPath"]+" to "+NEW_HOSTNAME)
+    print("* Setting hostname in file "+conf["PATHS"]["HostsPath"]+" to "+NEW_HOSTNAME)
     r = re.compile(r"(127\.0\.1\.1).*$")
     with fileinput.FileInput(conf["PATHS"]["HostsPath"], inplace=True, backup='.bak') as file:
         for line in file:
@@ -205,17 +211,20 @@ def number(args, conf):
 
     # interfaces file
     ip_num = args.number
-    print("Setting ip in file "+conf["PATHS"]["InterfacesPath"]+" to end with "+ip_num)
+    print("* Setting ip in file "+conf["PATHS"]["InterfacesPath"]+" to end with "+ip_num)
     r = re.compile(r"(address).*$")
     with fileinput.FileInput(conf["PATHS"]["InterfacesPath"], inplace=True, backup='.bak') as file:
         for line in file:
             print(r.sub(r"\1 %s" % "10.0.200."+ip_num, line), end='')
 
 
+    # print("lsof:")
+    # os.system('lsof +D mnt')
     # unmount and remove temp mnt folder
     os.system('umount {}'.format(mnt_folder))
 
-    print("Numbering done.\n")
+    print("*** Numbering done.")
+
 
 
 def main():
