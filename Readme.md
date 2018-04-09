@@ -8,18 +8,18 @@ amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] dev
 
 
 
-#### positional arguments:
+#### * positional arguments:
 
-...  **dev**                   device location of sd card
-
-
-
-#### optional arguments:
+...**dev**                   device location of sd card
 
 
-...**-h, --help**            show this help message and exit
 
-...**-p, --partition**       partition the remaining space on the sd card after flashing the image
+#### * optional arguments:
+
+
+⋅⋅⋅**-h, --help**            show this help message and exit
+
+⋅⋅⋅**-p, --partition**       partition the remaining space on the sd card after flashing the image
 
 ...**-f, --format**          format the created data partition to ext4
 
