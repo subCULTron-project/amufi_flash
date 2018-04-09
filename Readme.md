@@ -36,6 +36,7 @@ amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] dev
 
 **-cr, --cardreader**     use cardreader instead of usb (changes partition prefix)
 
+**--fish**                the target agent is an aFish, ensures that the correct IP and naming scheme are used
 
 
 #### Examples:
