@@ -42,6 +42,8 @@ def initArgParse():
                         help='get size in bytes of device')
     parser.add_argument('-cr', '--cardreader', action='store_true',
                         help='use cardreader instead of usb (changes partition prefix)')
+    parser.add_argument('--fish', action='store_true',
+                        help='the target agent is an aFish')
     return parser.parse_args()
 
 def checks(args, conf):
@@ -179,7 +181,10 @@ def number(args, conf):
         print("Error: could not mount {}{}".format(dev, part))
         sys.exit()
 
-    NEW_HOSTNAME = "aMussel"+args.number
+    if args.fish:
+        NEW_HOSTNAME = "aFish"+args.number
+    else:
+        NEW_HOSTNAME = "aMussel"+args.number
 
     # hostname file
     print("* Setting hostname in file "+conf["PATHS"]["HostNamePath"]+" to "+NEW_HOSTNAME)
@@ -193,7 +198,11 @@ def number(args, conf):
         for line in file:
             print(r.sub(r"\1   %s" % NEW_HOSTNAME, line), end='')
     # interfaces file
-    ip_num = args.number
+    if args.fish:
+        ip_num = '2'+str(args.number).zfill(2)
+    else:
+        ip_num = args.number
+
     print("* Setting ip in file "+conf["PATHS"]["InterfacesPath"]+" to end with "+ip_num)
     r = re.compile(r"(address).*$")
     with fileinput.FileInput(conf["PATHS"]["InterfacesPath"], inplace=True, backup='.bak') as file:
