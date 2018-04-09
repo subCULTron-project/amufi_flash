@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+"""amufi_flash.py a script that flashes a new subcultron image onto sd cards, with extras."""
+__author__      = "Daniel E. Moser"
+__date__        = "09.04.2018"
+__email__ = "daniel.moser@uni-graz.at"
+
+
 import argparse
 import configparser
 import fileinput
@@ -31,19 +38,14 @@ def initArgParse():
                         help="specify imagefile to be copied, default can be configured in 'config.ini'")
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='detailed output')
-    parser.add_argument('--force', action='store_true',
-                        help='no safety checks')
     parser.add_argument('-s', '--size', action='store_true',
                         help='get size in bytes of device')
-
     parser.add_argument('-cr', '--cardreader', action='store_true',
                         help='use cardreader instead of usb (changes partition prefix)')
     return parser.parse_args()
 
-
 def checks(args, conf):
-    """Check if device exists, has a filesystem on it already or has data on it.
-    Several additional checks to mitigate risks of overwriting data unintentionally.
+    """Check for signs of trying to overwrite the wrong device. Several additional checks to mitigate risks of overwriting data unintentionally or using nonexistent image.
     """
     dev = args.dev
 
@@ -89,7 +91,6 @@ def checks(args, conf):
     print('* Image path OK')
     print("*** Basic checks OK. \n")
 
-
 def copy(args, conf):
     """ Flash the system partition of the sd with the image specified in 'config.ini' or in the 'image' cmd-line argument. Test if flashing was successful.
     """
@@ -109,7 +110,6 @@ def copy(args, conf):
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
     print("Flashing done.\n")
-
 
 def partition(args, conf):
     """Construct the fdisk partition command and call the partition bash script to execute the command with the given options
@@ -135,9 +135,7 @@ def partition(args, conf):
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(cmd))
         sys.exit()
-
     print("*** Partitioning done.\n")
-
 
 def format(args, conf):
     """Format partitions3 to ext4
@@ -158,9 +156,7 @@ def format(args, conf):
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(" ".join(cmd)))
         sys.exit()
-
     print("*** Formatting done.\n")
-
 
 def number(args, conf):
     """Configure the hostname, and ip settings of the target device.
@@ -208,21 +204,17 @@ def number(args, conf):
     os.system('umount {}'.format(mnt_folder))
     print("*** Numbering done.")
 
-
 def main():
     """Main function
     """
-    # configuragtion parsing
+    # configuragtion/argument parsing
     conf = configparser.ConfigParser()
     conf.read(conf_file)
-
-    # parsing args
     args = initArgParse()
-
     # program start
     print("\n# aMuFi_flash #\n")
 
-    # just check device size:
+    # check device size only:
     if args.size:
         fd = os.open(args.dev, os.O_RDONLY)
         try:
@@ -232,11 +224,6 @@ def main():
             os.close(fd)
             print("Device {} size: {}".format(args.dev, size))
             sys.exit()
-    # safety test: check if device is empty:
-    if not args.force:
-        checks(args, conf)
-    else:
-        print("--force, no safety checks!")
     # copy:
     if args.copy_image:
         copy(args, conf)
