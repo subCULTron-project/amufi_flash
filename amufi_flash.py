@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import time
+import requests
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 conf_file = os.path.join(dir_path, 'config.ini')
@@ -36,8 +37,8 @@ def initArgParse():
                         help='specify the agent-number the image should be configured for')
     parser.add_argument('-i', '--image',  action='store',
                         help="specify imagefile to be copied, default can be configured in 'config.ini'")
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        help='detailed output')
+    parser.add_argument('-g', '--garbage', action='store_true',
+                        help='add some prime garbage to the output')
     parser.add_argument('-s', '--size', action='store_true',
                         help='get size in bytes of device')
     parser.add_argument('-cr', '--cardreader', action='store_true',
@@ -213,6 +214,18 @@ def number(args, conf):
     os.system('umount {}'.format(mnt_folder))
     print("*** Numbering done.")
 
+def garbage():
+    """garbage
+    """
+    try:
+        print("\n!@#$%^@##$%^&*#$%^&*()(**%#$#@%&*\n")
+        r = requests.get('https://api.whatdoestrumpthink.com/api/v1/quotes/random')
+        print(r.json()['message'])
+        print("                                - Donald J. Trump")
+    except Exception:
+        print("No connection to good vibes at the moment.")
+
+
 def main():
     """Main function
     """
@@ -221,7 +234,8 @@ def main():
     conf.read(conf_file)
     args = initArgParse()
     # program start
-    print("\n# aMuFi_flash #\n")
+    print("###############")
+    print("# aMuFi_Flash #\n")
 
     # check device size only:
     if args.size:
@@ -245,6 +259,10 @@ def main():
     # # number configs
     if args.number:
         number(args, conf)
+
+    # good vibes
+    if args.garbage:
+        garbage()
 
 if __name__ == "__main__":
     main()

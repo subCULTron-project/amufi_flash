@@ -6,7 +6,7 @@
 ### Usage:
 
 ```
-amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] dev
+amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] [--fish] dev
 ```
 
 
@@ -34,9 +34,12 @@ amufi_flash.py [-h] [-p] [-f] [-c] [-n NUMBER] [-i IMAGE] [-v] [-s] [-cr] dev
 
 **-s, --size**            just get size in bytes of device and exit
 
+**-g, --garbage**            add some prime garbage to the output 
+
 **-cr, --cardreader**     use cardreader instead of usb (changes partition prefix)
 
 **--fish**                the target agent is an aFish, ensures that the correct IP and naming scheme are used
+
 
 
 #### Examples:
