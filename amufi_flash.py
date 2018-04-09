@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import configparser
+import fileinput
 import os
+import re
 import subprocess
 import sys
 import time
 
-from utils import Checks
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 conf_file = os.path.join(dir_path, 'config.ini')
@@ -20,24 +21,25 @@ def initArgParse():
     parser = argparse.ArgumentParser()
     parser.add_argument('dev', action='store',
                         help='device location of sd card')
-
     parser.add_argument('-p', '--partition', action='store_true',
                         help='partition sd-card to "system" and "data" partition')
     parser.add_argument('-f', '--format', action='store_true',
                         help='format sd-card partitions to ext4')
     parser.add_argument('-c', '--copy_image', action='store_true',
                         help='copy image to "system" parition')
-    # parser.add_argument('-n', '--number',  action='store',
-    #                     help='specify the agent-number the image should be configured for')
-
+    parser.add_argument('-n', '--number',  action='store',
+                        help='specify the agent-number the image should be configured for')
     parser.add_argument('-i', '--image',  action='store',
                         help="specify imagefile to be copied, default can be configured in 'config.ini'")
-
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='detailed output')
     parser.add_argument('--force', action='store_true',
                         help='no safety checks')
+    parser.add_argument('-s', '--size', action='store_true',
+                        help='get size in bytes of device')
 
+    parser.add_argument('-cr', '--cardreader', action='store_true',
+                        help='use cardreader instead of usb (changes partition prefix)')
     return parser.parse_args()
 
 
@@ -51,29 +53,15 @@ def checks(args, conf):
     if not os.path.exists(dev):
         print("Error: device '{}' does not exist.".format(dev))
         sys.exit()
-
-    # check if target device is a aMussel/aFish sd-card already by checking for labels of partitions
-    # try:
-    #     if (subprocess.getoutput('e2label {}'.format(dev+str(1))) == 'system') and (subprocess.getoutput('e2label {}'.format(dev+str(2))) == 'data'):
-    #         print(
-    #             "Info: Device '{}' is likely a partitioned and formatted aMussel/aFish sd-card.".format(dev))
-    #         print("continue? n/[Y]")
-    #         k = input()
-    #         if k == 'n':
-    #             sys.exit()
-    # except subprocess.CalledProcessError:
-    #     pass
-        # print("checks: subprocess error while calling commands.")
-        # sys.exit()
+    print('* Device path OK')
 
     # check for signs that it is the wrong device by comparing to the size of bytes specified in conf.
     fd = os.open(dev, os.O_RDONLY)
     try:
-        size = str(os.lseek(fd, 0, os.SEEK_END))
-        print(size )
+        size = int(os.lseek(fd, 0, os.SEEK_END))
     finally:
         os.close(fd)
-    if int(size) != int(conf['DEFAULT']['SDSize']): 
+    if size != int(conf['DEFAULT']['SDSize']):
         print("WARNING: Device '{}' has a different size than specified in the conf file!".format(dev))
         print("WARNING: Specified: {}".format(conf['DEFAULT']['SDSize']))
         print("WARNING: Detected : {}".format(size))
@@ -82,7 +70,7 @@ def checks(args, conf):
         k = input()
         if k != 'y':
             sys.exit()
-
+    print('* Device size OK')
 
     # if copying image: image exists?
     try:
@@ -98,11 +86,10 @@ def checks(args, conf):
         if not os.path.exists(img):
             print("Error: image '{}' does not exist.".format(img))
             sys.exit()
-
     except NameError:
         pass
-
-    print("* Basic checks OK.")
+    print('* Image path OK')
+    print("*** Basic checks OK. \n")
 
 
 def copy(args, conf):
@@ -186,32 +173,48 @@ def number(args, conf):
     """
     dev = args.dev
 
-    # mount flashed image to 'mnt'
-    mnt_folder = "mnt"
-    os.system('mkdir {}'.format(mnt_folder))
+    # determine correct partition prefix
+    if args.cardreader:
+        part = conf['CARDREADER']['sys_part']
+    else:
+        part = conf['DEFAULT']['sys_part']
 
-    if os.WEXITSTATUS(os.system('mount {}1 mnt'.format(dev))) != 0:
-        print("Error: Could not mount {}1.".format(dev))
+    # mount flashed image to 'mnt'
+    mnt_folder = conf['DEFAULT']['Mountpoint']
+    if not os.path.exists(mnt_folder):
+        os.system('mkdir {}'.format(mnt_folder))
+
+    if os.WEXITSTATUS(os.system("mount {}{} mnt".format(dev, part))) != 0:
+        print("Error: Could not mount {}{}.".format(dev, part))
+        #os.system('rm -rf mnt')
         sys.exit()
 
-    mountpoint = os.path.join(dir_path, mnt_folder)
+    NEW_HOSTNAME = "aMussel"+args.number
 
-    interfaces_path = os.path.join(
-        mountpoint, conf.get('DEFAULT', 'InterfacesPath'))
-    hosts_path = os.path.join(mountpoint, conf.get('DEFAULT', 'HostsPath'))
-    hostname_path = os.path.join(
-        mountpoint, conf.get('DEFAULT', 'HostnamePath'))
+    # hostname file
+    print("Setting hostname in file "+conf["PATHS"]["HostNamePath"]+" to "+NEW_HOSTNAME)
+    f = open(conf["PATHS"]["HostNamePath"], 'w')
+    f.write(NEW_HOSTNAME+ os.linesep)
 
-    print(interfaces_path)
-    print(hostname_path)
-    print(hosts_path)
+    # hosts file
+    print("Setting hostname in file "+conf["PATHS"]["HostsPath"]+" to "+NEW_HOSTNAME)
+    r = re.compile(r"(127\.0\.1\.1).*$")
+    with fileinput.FileInput(conf["PATHS"]["HostsPath"], inplace=True, backup='.bak') as file:
+        for line in file:
+            print(r.sub(r"\1   %s" % NEW_HOSTNAME, line), end='')
 
-    # check if files exist:
-    # TODO:
+    # interfaces file
+    ip_num = args.number
+    print("Setting ip in file "+conf["PATHS"]["InterfacesPath"]+" to end with "+ip_num)
+    r = re.compile(r"(address).*$")
+    with fileinput.FileInput(conf["PATHS"]["InterfacesPath"], inplace=True, backup='.bak') as file:
+        for line in file:
+            print(r.sub(r"\1 %s" % "10.0.200."+ip_num, line), end='')
+
 
     # unmount and remove temp mnt folder
     os.system('umount {}'.format(mnt_folder))
-    os.system('rm -r {}'.format(mnt_folder))
+
     print("Numbering done.\n")
 
 
@@ -226,7 +229,19 @@ def main():
     args = initArgParse()
 
     # program start
-    print("\n aMuFi_flash")
+    print("\n# aMuFi_flash #\n")
+
+    # just check device size:
+    if args.size:
+        fd = os.open(args.dev, os.O_RDONLY)
+        try:
+            size = int(os.lseek(fd, 0, os.SEEK_END))
+            print(size)
+        finally:
+            os.close(fd)
+            print("Device {} size: {}".format(args.dev, size))
+            sys.exit()
+
 
     # safety test: check if device is empty:
     if not args.force:
@@ -247,8 +262,8 @@ def main():
         format(args, conf)
 
     # # number configs
-    # if args.number:
-    #     number(args, conf)
+    if args.number:
+        number(args, conf)
 
 
 if __name__ == "__main__":
