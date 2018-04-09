@@ -27,12 +27,11 @@ def initArgParse():
                         help='format sd-card partitions to ext4')
     parser.add_argument('-c', '--copy_image', action='store_true',
                         help='copy image to "system" parition')
-    parser.add_argument('-n', '--number',  action='store',
-                        help='specify the agent-number the image should be configured for')
+    # parser.add_argument('-n', '--number',  action='store',
+    #                     help='specify the agent-number the image should be configured for')
 
     parser.add_argument('-i', '--image',  action='store',
                         help="specify imagefile to be copied, default can be configured in 'config.ini'")
-
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='detailed output')
@@ -44,7 +43,7 @@ def initArgParse():
 
 def checks(args, conf):
     """Check if device exists, has a filesystem on it already or has data on it.
-    Several additional checks to mitigate risks of overwriting unintentionally.
+    Several additional checks to mitigate risks of overwriting data unintentionally.
     """
     dev = args.dev
 
@@ -52,55 +51,50 @@ def checks(args, conf):
     if not os.path.exists(dev):
         print("Error: device '{}' does not exist.".format(dev))
         sys.exit()
-    # device is not a partition
-    if dev[-1:].isdigit():
-        print("Error: '{}' is probably a partition, use the device name, e.g. '/dev/sda'.".format(dev))
-        sys.exit()
 
-    # check if target device is a aMussel/aFish sd-card already
+    # check if target device is a aMussel/aFish sd-card already by checking for labels of partitions
+    # try:
+    #     if (subprocess.getoutput('e2label {}'.format(dev+str(1))) == 'system') and (subprocess.getoutput('e2label {}'.format(dev+str(2))) == 'data'):
+    #         print(
+    #             "Info: Device '{}' is likely a partitioned and formatted aMussel/aFish sd-card.".format(dev))
+    #         print("continue? n/[Y]")
+    #         k = input()
+    #         if k == 'n':
+    #             sys.exit()
+    # except subprocess.CalledProcessError:
+    #     pass
+        # print("checks: subprocess error while calling commands.")
+        # sys.exit()
+
+    # check for signs that it is the wrong device by comparing to the size of bytes specified in conf.
+    fd = os.open(dev, os.O_RDONLY)
     try:
-        if (subprocess.getoutput('e2label {}'.format(dev+str(1))) == 'system') and          (subprocess.getoutput('e2label {}'.format(dev+str(2))) == 'data'):
-            print("Info: Device '{}' is likely a partitioned and formatted aMussel/aFish sd-card.".format(dev))
-            print("continue? n/[Y]")
-            k = input()
-            if k == 'n':
-                sys.exit()
-            return
-    except subprocess.CalledProcessError:
-        print("checks(): subprocess error while calling commands.")
-        sys.exit()
+        size = str(os.lseek(fd, 0, os.SEEK_END))
+        print(size )
+    finally:
+        os.close(fd)
+    if int(size) != int(conf['DEFAULT']['SDSize']): 
+        print("WARNING: Device '{}' has a different size than specified in the conf file!".format(dev))
+        print("WARNING: Specified: {}".format(conf['DEFAULT']['SDSize']))
+        print("WARNING: Detected : {}".format(size))
 
-    # probably the wrong device - checks
-    part_init=3
-    part=part_init
-    while True:
-        if os.path.exists(dev+str(part)):
-            label = subprocess.getoutput('e2label {}'.format(dev+str(part)))
-            print("Warning: '{}' {} exists, correct device?".format(dev+str(part),label))
-            part += 1
-        else:
-            break
-    if part > part_init:
-        print(
-            "Having more than three partition hints at the target not being an empty sd-card or a aMu or aFi card.")
-        print("continue? n/[Y]")
+        print("continue? [N]/y")
         k = input()
-        if k == 'n':
+        if k != 'y':
             sys.exit()
-        return
+
 
     # if copying image: image exists?
     try:
         # image from cmd-line arg
-
         if args.image:
-            img=os.path.join(dir_path, args.image)
-            if  not os.path.exists(img):
+            img = os.path.join(dir_path, args.image)
+            if not os.path.exists(img):
                 print("Error: image '{}' does not exist.".format(img))
                 sys.exit()
 
         # image specified in 'config/ini'
-        img=os.path.join(dir_path, conf['DEFAULT']['Image'])
+        img = os.path.join(dir_path, conf['DEFAULT']['Image'])
         if not os.path.exists(img):
             print("Error: image '{}' does not exist.".format(img))
             sys.exit()
@@ -114,13 +108,13 @@ def checks(args, conf):
 def copy(args, conf):
     """ Flash the system partition of the sd with the image specified in 'config.ini' or in the 'image' cmd-line argument. Test if flashing was successful.
     """
-    img=os.path.join(dir_path, conf['DEFAULT']['Image'])
-    dev=args.dev
+    img = os.path.join(dir_path, conf['DEFAULT']['Image'])
+    dev = args.dev
 
     print("Flashing device {} with image {}.".format(dev, img))
 
     # create flashing command
-    cmd=['dd', str('if={}'.format(img)), str(
+    cmd = ['dd', str('if={}'.format(img)), str(
         'of={}'.format(dev)), str('bs=4M')]
     if args.verbose:
         print("* Executing command: {} ...".format(" ".join(cmd)))
@@ -141,10 +135,9 @@ def partition(args, conf):
 
     print("Partitioning the unused space on device {}.".format(dev))
 
-
     # create partition command
-    partition_script_path=os.path.join(dir_path, 'partition.sh')
-    cmd=[partition_script_path, str(args.dev)]
+    partition_script_path = os.path.join(dir_path, 'partition.sh')
+    cmd = [partition_script_path, str(args.dev)]
 
     if args.verbose:
         print("* Executing command: {} ...".format(" ".join(cmd)))
@@ -158,7 +151,7 @@ def partition(args, conf):
 
     # execute partprobe to update partitiontable in kernel
     try:
-        cmd = ['partprobe', str(dev)]
+        cmd = ['partprobe']  # , str(dev)]
         subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
         print("subprocess error while calling '{}'.".format(cmd))
@@ -170,13 +163,12 @@ def partition(args, conf):
 def format(args, conf):
     """Format partitions3 to ext4
     """
-    dev=args.dev
+    dev = args.dev
 
     print("Formatting data partition to ext4.".format(dev))
 
     # create format partition commands
-    cmd=['mkfs.ext4', '-L', 'data', '-F', str(dev+'3')]
-
+    cmd = ['mkfs.ext4', '-L', 'data', '-F', str(dev+'3')]
 
     if args.verbose:
         print("* Executing command: {}".format(cmd))
@@ -204,9 +196,11 @@ def number(args, conf):
 
     mountpoint = os.path.join(dir_path, mnt_folder)
 
-    interfaces_path = os.path.join(mountpoint, conf.get('DEFAULT', 'InterfacesPath'))
+    interfaces_path = os.path.join(
+        mountpoint, conf.get('DEFAULT', 'InterfacesPath'))
     hosts_path = os.path.join(mountpoint, conf.get('DEFAULT', 'HostsPath'))
-    hostname_path = os.path.join(mountpoint, conf.get('DEFAULT', 'HostnamePath'))
+    hostname_path = os.path.join(
+        mountpoint, conf.get('DEFAULT', 'HostnamePath'))
 
     print(interfaces_path)
     print(hostname_path)
@@ -220,15 +214,16 @@ def number(args, conf):
     os.system('rm -r {}'.format(mnt_folder))
     print("Numbering done.\n")
 
+
 def main():
     """Main function
     """
     # configuragtion parsing
-    conf=configparser.ConfigParser()
+    conf = configparser.ConfigParser()
     conf.read(conf_file)
 
     # parsing args
-    args=initArgParse()
+    args = initArgParse()
 
     # program start
     print("\n aMuFi_flash")
@@ -251,12 +246,9 @@ def main():
     if args.format:
         format(args, conf)
 
-    # number configs
-    if args.number:
-        number(args, conf)
-
-
-
+    # # number configs
+    # if args.number:
+    #     number(args, conf)
 
 
 if __name__ == "__main__":
