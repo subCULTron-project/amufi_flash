@@ -8,11 +8,9 @@ import subprocess
 import sys
 import time
 
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
 conf_file = os.path.join(dir_path, 'config.ini')
 dev_null = open(os.devnull, 'w')
-
 
 def initArgParse():
     """Parse cmd-line arguments and return the parser
@@ -103,8 +101,6 @@ def copy(args, conf):
     # create flashing command
     cmd = ['dd', str('if={}'.format(img)), str(
         'of={}'.format(dev)), str('bs=4M')]
-    if args.verbose:
-        print("* Executing command: {} ...".format(" ".join(cmd)))
 
     # execute command
     try:
@@ -125,10 +121,6 @@ def partition(args, conf):
     # create partition command
     partition_script_path = os.path.join(dir_path, 'partition.sh')
     cmd = [partition_script_path, str(args.dev)]
-
-    if args.verbose:
-        print("* Executing command: {} ...".format(" ".join(cmd)))
-
     # execute partition command
     try:
         subprocess.call(cmd, stdout=dev_null, stderr=dev_null)
@@ -161,9 +153,6 @@ def format(args, conf):
 
     # create format partition commands
     cmd = ['mkfs.ext4', '-L', 'data', '-F', dev+part]
-
-    if args.verbose:
-        print("* Executing command: {}".format(cmd))
     try:
         subprocess.call(cmd, stdout=dev_null)
     except subprocess.CalledProcessError:
@@ -201,14 +190,12 @@ def number(args, conf):
     f = open(conf["PATHS"]["HostNamePath"], 'w')
     f.write(NEW_HOSTNAME+ os.linesep)
     f.close()
-
     # hosts file
     print("* Setting hostname in file "+conf["PATHS"]["HostsPath"]+" to "+NEW_HOSTNAME)
     r = re.compile(r"(127\.0\.1\.1).*$")
     with fileinput.FileInput(conf["PATHS"]["HostsPath"], inplace=True, backup='.bak') as file:
         for line in file:
             print(r.sub(r"\1   %s" % NEW_HOSTNAME, line), end='')
-
     # interfaces file
     ip_num = args.number
     print("* Setting ip in file "+conf["PATHS"]["InterfacesPath"]+" to end with "+ip_num)
@@ -217,14 +204,9 @@ def number(args, conf):
         for line in file:
             print(r.sub(r"\1 %s" % "10.0.200."+ip_num, line), end='')
 
-
-    # print("lsof:")
-    # os.system('lsof +D mnt')
     # unmount and remove temp mnt folder
     os.system('umount {}'.format(mnt_folder))
-
     print("*** Numbering done.")
-
 
 
 def main():
@@ -250,30 +232,23 @@ def main():
             os.close(fd)
             print("Device {} size: {}".format(args.dev, size))
             sys.exit()
-
-
     # safety test: check if device is empty:
     if not args.force:
         checks(args, conf)
     else:
         print("--force, no safety checks!")
-
     # copy:
     if args.copy_image:
         copy(args, conf)
-
     # partition:
     if args.partition:
         partition(args, conf)
-
     # format:
     if args.format:
         format(args, conf)
-
     # # number configs
     if args.number:
         number(args, conf)
-
 
 if __name__ == "__main__":
     main()
